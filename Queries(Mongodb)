@@ -1,0 +1,3 @@
+db.getCollection("InboundCommunication").aggregate([
+{ $match: {
+    CustomerId : ObjectId("5e7e34bbe20517447c5aa03a"),
