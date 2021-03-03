@@ -1,3 +1,114 @@
+db.getCollection("Employee").find({CustomerId : ObjectId("5e7e34bbe20517447c5aa03a")})
+
+^^ Find employee ID, with certain data, and customer ID, 
+1. go into coll, then intellshell and then find, input cust ID and object ID
+
+
+
+
+
+For deleting employees with cust ID and employer ID "records", In intellishell
+
+
+
+var customerId = ObjectId("59f0ab28c5f33013d06e40f4"); // Select Medical
+
+var employerId = ObjectId('5e7e38c3e20517447c5aa611'); // Null/0
+
+var ticketNumber = "TI-631";
+
+
+// DUMMY CHECK: Is this Customer/Employer pair what we expect?
+var customer = db.getCollection("Customer").findOne({
+    _id: customerId,
+    IsDeleted: { $ne: true }
+});
+var employer = db.getCollection("Employer").findOne({
+    _id: employerId,
+    IsDeleted: { $ne: true }
+});
+
+if(customer && employer){
+    var employeeResults = db.getCollection("Employee").updateMany({
+        _id: {$in: employeeGuids},
+        CustomerId: customerId,
+        EmployerId: employerId,
+        IsDeleted: { $ne: true }
+    },
+    {
+        $set: {
+            IsDeleted: true,
+            sbr: ticketNumber
+        },
+        $currentDate: {sdt: true}
+    });
+
+    print("Employees Deleted: " + employeeResults.modifiedCount)
+
+} else {
+    throw new Error('Customer or Employer not found .... check IDS. No script changes were made.');
+}
+
+
+
+
+
+
+##aggregate data for project inbound comms between a certain time frame
+
 db.getCollection("InboundCommunication").aggregate([
 { $match: {
     CustomerId : ObjectId("5e7e34bbe20517447c5aa03a"),
+    ProcessingError : { $exists : true ,  $eq :"InboundCommunicationService. There was an error retrieving the file  for processing. InboundCommunicationService.AttachDocumentToCase - Exception" },
+    cdt : { $gt : ISODate("2021-02-04T00:00:00.000+0000") }
+}}, 
+{ $project: { 
+    _id : 1,  
+    CustomerId: 1,
+    cdt: 1,
+    TransactionId: 1,
+    CallerId: 1,
+    NumberOfPages: 1,
+    Status: 1,
+    ProcessingError: 1
+}},
+{ $lookup : { 
+    from : "InboundCommunication", 
+    let: { tranid: "$TransactionId", custid: "$CustomerId", icid: "$_id"},
+    pipeline: [
+              { $match:
+                 { $expr:
+                    { $and:
+                       [
+                         { $eq: [ "$TransactionId",  "$$tranid" ] },
+                         { $eq: [ "$CustomerId", "$$custid" ] },
+                         { $ne: [ "$_id", "$$icid" ] },
+                       ]
+                    }
+                 }
+              },
+              { $project: { _id:1, Status: 1, ProcessingError:1 } }
+           ],
+    as : "ic2"
+}}, 
+{ $unwind : { 
+    path : "$ic2", 
+    preserveNullAndEmptyArrays : true
+}},  
+{ $project: { 
+    _id : 1,  
+    cdt: 1,
+    TransactionId: 1,
+    CallerId: 1,
+    NumberOfPages: 1,
+    Status: 1,
+    ProcessingError: 1,
+    ic2Id: "$ic2._id",
+    ic2Status: "$ic2.Status",
+    ic2PError: "$ic2.ProcessingError",
+}}, 
+], 
+{ 
+    "allowDiskUse" : true
+}
+);
